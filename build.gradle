@@ -1,3 +1,5 @@
+import com.bmuschko.gradle.docker.tasks.image.*
+
 buildscript {
     repositories {
         maven { url "https://repo.grails.org/grails/core" }
@@ -70,6 +72,13 @@ dependencies {
     testCompile "org.grails:grails-web-testing-support"
 }
 
+// Enable the creation of a fully
+// executable archive file.
+// needed to execute our war in docker
+bootWar {
+    launchScript()
+}
+
 bootRun {
     jvmArgs(
         '-Dspring.output.ansi.enabled=always', 
@@ -80,3 +89,77 @@ bootRun {
     String springProfilesActive = 'spring.profiles.active'
     systemProperty springProfilesActive, System.getProperty(springProfilesActive)
 }
+
+ext {
+    // let's hard code the name and version for easier processing.
+    String name = "someProject"
+    latestTag = "latest"
+    dockerTag = 'latest'
+    dockerName = "${name}".toLowerCase()
+    dockerBuildDir = mkdir("${buildDir}/docker")
+}
+task prepareDocker(type: Copy, dependsOn: assemble) {
+    description = 'Copy files from src/main/docker and application jar to Docker temporal build directory'
+    group = 'Docker'
+
+    from 'src/main/docker'
+    from war.archivePath //copy the war into work folder
+
+    into dockerBuildDir
+}
+task createDockerfile(type: Dockerfile, dependsOn: prepareDocker) {
+    description = 'Create a Dockerfile file'
+    group = 'Docker'
+
+    destFile = project.file("${dockerBuildDir}/Dockerfile")
+
+    from 'adoptopenjdk/openjdk11:alpine'
+    label(['maintainer': 'Hélain Schoonjans'])
+
+    exposePort 8080
+
+    workingDir '/app'
+
+    copyFile war.archiveName, 'application.war' //copy the archive into the new docker
+    copyFile 'app-entrypoint.sh', 'app-entrypoint.sh'
+    runCommand 'chmod +x app-entrypoint.sh'
+
+    entryPoint '/app/app-entrypoint.sh'
+}
+task buildImage(type: DockerBuildImage, dependsOn: createDockerfile) {
+    description = 'Create Docker image to run the Grails application'
+    group = 'Docker'
+
+    inputDir = file(dockerBuildDir)
+    tag = "${dockerName}:${latestTag}"
+}
+
+task tagLatestImage(type: DockerTagImage, dependsOn: buildImage) {
+    force = true
+    repository = dockerName
+    targetImageId { buildImage.getTag() }
+    tag = dockerTag
+}
+
+task pushLatestImage(type: DockerPushImage, dependsOn: tagLatestImage) {
+    description = 'Push the docker on ECR'
+    group = 'Docker'
+
+    imageName = dockerName
+    tag = latestTag
+}
+
+task pushImage(type: DockerPushImage, dependsOn: pushLatestImage) {
+    description = 'Push the docker on ECR with a tag'
+    group = 'Docker'
+
+    imageName = dockerName
+    tag = dockerTag
+}
+
+task removeImage(type: DockerRemoveImage) {
+    force = true
+    targetImageId { buildImage.getImageId() }
+}
+
+pushImage.finalizedBy removeImage
