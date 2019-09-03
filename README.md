@@ -1,0 +1,1 @@
+This project aims to reproduce and share an issue when executing grails 4 from an executable war in a docker
