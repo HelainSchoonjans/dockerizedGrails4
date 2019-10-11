@@ -9,6 +9,6 @@ Note: after similar setup to my other project, the demo just worked. there is pr
 
 == no main manifest attribute
 
-?
+Make org.springframework.boot:spring-boot-starter-tomcat provided.
 
 
