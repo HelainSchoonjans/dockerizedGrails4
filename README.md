@@ -12,3 +12,6 @@ Note: after similar setup to my other project, the demo just worked. there is pr
 Make org.springframework.boot:spring-boot-starter-tomcat provided.
 
 
+## Protocol_version error
+
+Make sure that the right JVM version is selected in Idea; the same as the project JVM version. Ctrl+Alt+S and search 'gradle'
